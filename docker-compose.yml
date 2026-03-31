@@ -3,7 +3,7 @@ version: '3.8'
 services:
   traefik:
     image: traefik:v3.6.11
-    container_name: traefik
+    container_name: traefik_lekkeratlas
     restart: always
     command:
       - "--providers.docker=true"
