@@ -1,0 +1,28 @@
+entryPoints:
+  web:
+    address: ":80"
+  websecure:
+    address: ":443"
+  dashboard:
+    address: "127.0.0.1:8080" # Restrict dashboard access to localhost
+
+providers:
+  docker:
+    exposedByDefault: false
+
+  file:
+    directory: "/etc/traefik"
+
+api:
+  dashboard: true
+
+log:
+  level: DEBUG
+
+certificatesResolvers:
+  le:
+    acme:
+      #email: "${ACME_EMAIL}"
+      storage: /letsencrypt/acme.json
+      dnsChallenge:
+        provider: transip

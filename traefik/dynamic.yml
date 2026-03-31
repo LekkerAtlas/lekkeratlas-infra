@@ -1,0 +1,10 @@
+http:
+  middlewares:
+    https-redirect:
+      redirectScheme:
+        scheme: https
+
+  routers:
+    to-traefik:
+      rule: "Host(`localhost`)" # Dashboard only open for localhost (tunnel port if you want to access)
+      service: api@internal

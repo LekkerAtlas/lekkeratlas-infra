@@ -1,0 +1,66 @@
+version: '3.8'
+
+services:
+  traefik:
+    image: traefik:v3.6.11
+    container_name: traefik
+    restart: always
+    command:
+      - "--providers.docker=true"
+      - "--providers.file.directory=/etc/traefik"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      - "--entrypoints.dashboard.address=127.0.0.1:8080" # Restrict dashboard to localhost
+      - "--api.dashboard=true"
+      - "--certificatesresolvers.le.acme.dnschallenge=true"
+      - "--certificatesresolvers.le.acme.dnschallenge.provider=transip"
+      - "--certificatesresolvers.le.acme.email=${ACME_EMAIL}"
+      - "--certificatesresolvers.le.acme.storage=/letsencrypt/acme.json"
+    ports:
+      - "80:80"
+      - "443:443"
+      - "8080:8080" # TODO Add working dashboard
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./traefik:/etc/traefik
+      - ./traefik/letsencrypt:/letsencrypt
+    environment:
+      - ACME_EMAIL=${ACME_EMAIL}
+      - TRANSIP_ACCOUNT_NAME=${TRANSIP_ACCOUNT_NAME}
+      - TRANSIP_PRIVATE_KEY_PATH=/etc/traefik/transip.key
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.traefik.entrypoints=websecure"
+      - "traefik.http.routers.traefik.service=api@internal"
+
+  frontend:
+    image: ghcr.io/lekkeratlas/lekkeratlas-application:latest
+    container_name: frontend
+    restart: always
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.lekkeratlas-main-http.rule=Host(`lekkeratlas.nl`)"
+      - "traefik.http.routers.lekkeratlas-main-http.entrypoints=web"
+      - "traefik.http.routers.lekkeratlas-main-http.middlewares=lekkeratlas-main-redirect"
+      - "traefik.http.routers.lekkeratlas-main.rule=Host(`lekkeratlas.nl`)"
+      - "traefik.http.routers.lekkeratlas-main.entrypoints=websecure"
+      - "traefik.http.routers.lekkeratlas-main.tls.certresolver=le"
+      - "traefik.http.services.lekkeratlas-main.loadbalancer.server.port=80"
+      - "traefik.http.middlewares.lekkeratlas-main-redirect.redirectscheme.scheme=https"
+      - "traefik.http.middlewares.lekkeratlas-main-redirect.redirectscheme.permanent=true"
+
+  backend:
+    image: ghcr.io/lekkeratlas/lekkeratlas-backend:latest
+    container_name: backend
+    restart: always
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.lekkeratlas-backend-http.rule=Host(`backend.lekkeratlas.nl`)"
+      - "traefik.http.routers.lekkeratlas-backend-http.entrypoints=web"
+      - "traefik.http.routers.lekkeratlas-backend-http.middlewares=lekkeratlas-backend-redirect"
+      - "traefik.http.routers.lekkeratlas-backend.rule=Host(`backend.lekkeratlas.nl`)"
+      - "traefik.http.routers.lekkeratlas-backend.entrypoints=websecure"
+      - "traefik.http.routers.lekkeratlas-backend.tls.certresolver=le"
+      - "traefik.http.services.lekkeratlas-backend.loadbalancer.server.port=8080"
+      - "traefik.http.middlewares.lekkeratlas-backend-redirect.redirectscheme.scheme=https"
+      - "traefik.http.middlewares.lekkeratlas-backend-redirect.redirectscheme.permanent=true"

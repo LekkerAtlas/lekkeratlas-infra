@@ -1,0 +1,6 @@
+# Traefik secrets
+traefik/transip.key
+traefik/letsencrypt
+
+# Secrets
+.env
