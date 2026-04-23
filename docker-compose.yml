@@ -42,7 +42,7 @@ services:
       - public
     labels:
       - "traefik.enable=true"
-      - "traefik.docker.network=public"
+      - "traefik.docker.network=lekkeratlas-infra_public"
       - "traefik.http.routers.lekkeratlas-main-http.rule=Host(`lekkeratlas.nl`)"
       - "traefik.http.routers.lekkeratlas-main-http.entrypoints=web"
       - "traefik.http.routers.lekkeratlas-main-http.middlewares=lekkeratlas-main-redirect"
@@ -68,7 +68,7 @@ services:
       AUTHENTIK_CLIENT_SECRET: ${AUTHENTIK_LEKKER_ATLAS_CLIENT_SECRET}
     labels:
       - "traefik.enable=true"
-      - "traefik.docker.network=public"
+      - "traefik.docker.network=lekkeratlas-infra_public"
       - "traefik.http.routers.lekkeratlas-backend-http.rule=Host(`backend.lekkeratlas.nl`)"
       - "traefik.http.routers.lekkeratlas-backend-http.entrypoints=web"
       - "traefik.http.routers.lekkeratlas-backend-http.middlewares=lekkeratlas-backend-redirect"
@@ -164,7 +164,7 @@ services:
       - authentik
     labels:
       - "traefik.enable=true"
-      - "traefik.docker.network=public"
+      - "traefik.docker.network=lekkeratlas-infra_public"
       - "traefik.http.routers.authentik-http.rule=Host(`auth.lekkeratlas.nl`)"
       - "traefik.http.routers.authentik-http.entrypoints=web"
       - "traefik.http.routers.authentik-http.middlewares=authentik-redirect"
