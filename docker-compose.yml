@@ -202,7 +202,7 @@ volumes:
 
 networks:
   public:
-    external: true
+    internal: false
   lekkeratlas_database:
     internal: true
   rabbitmq:
