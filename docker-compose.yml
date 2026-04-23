@@ -1,9 +1,10 @@
-version: '3.8'
-
 services:
+
+  # Traefik for network routing
+
   traefik:
     image: traefik:v3.6.11
-    container_name: traefik_lekkeratlas
+    container_name: traefik
     restart: always
     command:
       - "--providers.docker=true"
@@ -19,7 +20,7 @@ services:
     ports:
       - "80:80"
       - "443:443"
-      - "8080:8080" # TODO Add working dashboard
+      # - "127.0.0.1:8081:8080" # Optional local-only debug binding for the Traefik dashboard
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - ./traefik:/etc/traefik
@@ -28,15 +29,17 @@ services:
       - ACME_EMAIL=${ACME_EMAIL}
       - TRANSIP_ACCOUNT_NAME=${TRANSIP_ACCOUNT_NAME}
       - TRANSIP_PRIVATE_KEY_PATH=/etc/traefik/transip.key
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.traefik.entrypoints=websecure"
-      - "traefik.http.routers.traefik.service=api@internal"
+    networks:
+      - public
+
+  # Core application components:
 
   frontend:
     image: ghcr.io/lekkeratlas/lekkeratlas-application:latest
-    container_name: frontend
+    container_name: lekkeratlas-frontend
     restart: always
+    networks:
+      - public
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.lekkeratlas-main-http.rule=Host(`lekkeratlas.nl`)"
@@ -51,8 +54,17 @@ services:
 
   backend:
     image: ghcr.io/lekkeratlas/lekkeratlas-backend:latest
-    container_name: backend
+    container_name: lekkeratlas-backend
     restart: always
+    networks:
+      - public
+      - rabbitmq
+      - lekkeratlas_database
+    environment:
+      # OIDC config
+      AUTHENTIK_HOST: https://auth.lekkeratlas.nl
+      AUTHENTIK_CLIENT_ID: ${AUTHENTIK_LEKKER_ATLAS_CLIENT_ID}
+      AUTHENTIK_CLIENT_SECRET: ${AUTHENTIK_LEKKER_ATLAS_CLIENT_SECRET}
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.lekkeratlas-backend-http.rule=Host(`backend.lekkeratlas.nl`)"
@@ -64,3 +76,136 @@ services:
       - "traefik.http.services.lekkeratlas-backend.loadbalancer.server.port=8080"
       - "traefik.http.middlewares.lekkeratlas-backend-redirect.redirectscheme.scheme=https"
       - "traefik.http.middlewares.lekkeratlas-backend-redirect.redirectscheme.permanent=true"
+
+  database:
+    image: ghcr.io/lekkeratlas/lekkeratlas-database:latest
+    container_name: lekkeratlas-database
+    restart: always
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
+    volumes:
+      - lekkeratlas_database_data:/var/lib/postgresql/data
+    # ports:
+    #   - "127.0.0.1:5432:5432" # Optional local-only debug binding for PostgreSQL
+    networks:
+      - lekkeratlas_database
+
+  # Queue logic components:
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: lekkeratlas-rabbitmq
+    restart: always
+    environment:
+      - RABBITMQ_DEFAULT_USER=${RABBITMQ_DEFAULT_USER}
+      - RABBITMQ_DEFAULT_PASS=${RABBITMQ_DEFAULT_PASS}
+    expose:
+      - "5672"
+      # - "15672"
+    # ports:
+      # - "127.0.0.1:15673:15672" # Optional local-only debug binding for the RabbitMQ management UI
+    # Not exposed to public network; only used internally by backend and workers
+    networks:
+      - rabbitmq
+
+  # Authentik container components:
+
+  authentik-postgresql:
+    image: postgres:16-alpine
+    container_name: authentik-postgres
+    restart: always
+    environment:
+      - POSTGRES_USER=${AUTHENTIK_POSTGRES_USER}
+      - POSTGRES_PASSWORD=${AUTHENTIK_POSTGRES_PASSWORD}
+      - POSTGRES_DB=${AUTHENTIK_POSTGRES_DB:-authentik}
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - pg_isready -d $${POSTGRES_DB} -U $${POSTGRES_USER}
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    volumes:
+      - authentik_postgresql_data:/var/lib/postgresql/data
+    # ports:
+    #   - "127.0.0.1:5433:5432" # Optional local-only debug binding for Authentik PostgreSQL
+    networks:
+      - authentik
+
+  authentik-server:
+    image: ${AUTHENTIK_IMAGE:-ghcr.io/goauthentik/server}:${AUTHENTIK_TAG:-2026.2.2}
+    container_name: lekkeratlas-authentik-server
+    restart: always
+    command: server
+    depends_on:
+      authentik-postgresql:
+        condition: service_healthy
+    environment:
+      - AUTHENTIK_SECRET_KEY=${AUTHENTIK_SECRET_KEY}
+      - AUTHENTIK_ERROR_REPORTING__ENABLED=false
+      - AUTHENTIK_POSTGRESQL__HOST=authentik-postgresql
+      - AUTHENTIK_POSTGRESQL__PORT=5432
+      - AUTHENTIK_POSTGRESQL__USER=${AUTHENTIK_POSTGRES_USER}
+      - AUTHENTIK_POSTGRESQL__NAME=${AUTHENTIK_POSTGRES_DB:-authentik}
+      - AUTHENTIK_POSTGRESQL__PASSWORD=${AUTHENTIK_POSTGRES_PASSWORD}
+    shm_size: 512mb
+    volumes:
+      - ./data:/data
+      - ./custom-templates:/templates
+    # ports:
+    #   - "127.0.0.1:9000:9000" # Optional local-only debug binding for Authentik server
+    networks:
+      - public
+      - authentik
+    labels:
+      - "traefik.http.routers.authentik-http.rule=Host(`auth.lekkeratlas.nl`)"
+      - "traefik.http.routers.authentik-http.entrypoints=web"
+      - "traefik.http.routers.authentik-http.middlewares=authentik-redirect"
+      - "traefik.http.middlewares.authentik-redirect.redirectscheme.scheme=https"
+      - "traefik.http.routers.authentik.rule=Host(`auth.lekkeratlas.nl`)"
+      - "traefik.http.routers.authentik.entrypoints=websecure"
+      - "traefik.http.routers.authentik.tls.certresolver=le"
+      - "traefik.http.services.authentik.loadbalancer.server.port=9000"
+      - "traefik.http.middlewares.authentik-redirect.redirectscheme.permanent=true"
+
+  authentik-worker:
+    image: ${AUTHENTIK_IMAGE:-ghcr.io/goauthentik/server}:${AUTHENTIK_TAG:-2026.2.2}
+    container_name: lekkeratlas-authentik-worker
+    restart: always
+    command: worker
+    depends_on:
+      authentik-postgresql:
+        condition: service_healthy
+    environment:
+      - AUTHENTIK_SECRET_KEY=${AUTHENTIK_SECRET_KEY}
+      - AUTHENTIK_POSTGRESQL__HOST=authentik-postgresql
+      - AUTHENTIK_POSTGRESQL__PORT=5432
+      - AUTHENTIK_POSTGRESQL__USER=${AUTHENTIK_POSTGRES_USER}
+      - AUTHENTIK_POSTGRESQL__NAME=${AUTHENTIK_POSTGRES_DB:-authentik}
+      - AUTHENTIK_POSTGRESQL__PASSWORD=${AUTHENTIK_POSTGRES_PASSWORD}
+    shm_size: 512mb
+    user: root
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./data:/data
+      - ./certs:/certs
+      - ./custom-templates:/templates
+    networks:
+      - authentik
+
+volumes:
+  lekkeratlas_database_data:
+  authentik_postgresql_data:
+
+networks:
+  public:
+    external: true
+  lekkeratlas_database:
+    internal: true
+  rabbitmq:
+    internal: true
+  authentik:
+    internal: true
