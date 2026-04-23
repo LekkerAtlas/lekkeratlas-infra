@@ -161,6 +161,7 @@ services:
       - public
       - authentik
     labels:
+      - "traefik.enable=true"
       - "traefik.http.routers.authentik-http.rule=Host(`auth.lekkeratlas.nl`)"
       - "traefik.http.routers.authentik-http.entrypoints=web"
       - "traefik.http.routers.authentik-http.middlewares=authentik-redirect"
