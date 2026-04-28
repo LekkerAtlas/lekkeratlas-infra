@@ -53,8 +53,8 @@ services:
       - "traefik.http.middlewares.lekkeratlas-main-redirect.redirectscheme.scheme=https"
       - "traefik.http.middlewares.lekkeratlas-main-redirect.redirectscheme.permanent=true"
 
-  backend:
-    image: ghcr.io/lekkeratlas/lekkeratlas-backend:latest
+  backend-api:
+    image: ghcr.io/lekkeratlas/lekkeratlas-backend-api:latest
     container_name: lekkeratlas-backend
     restart: always
     networks:
@@ -66,18 +66,34 @@ services:
       AUTHENTIK_HOST: https://auth.lekkeratlas.nl
       AUTHENTIK_CLIENT_ID: ${AUTHENTIK_LEKKER_ATLAS_CLIENT_ID}
       AUTHENTIK_CLIENT_SECRET: ${AUTHENTIK_LEKKER_ATLAS_CLIENT_SECRET}
+      # RabbitMQ config
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=lekkeratlas-infra_public"
-      - "traefik.http.routers.lekkeratlas-backend-http.rule=Host(`backend.lekkeratlas.nl`)"
-      - "traefik.http.routers.lekkeratlas-backend-http.entrypoints=web"
-      - "traefik.http.routers.lekkeratlas-backend-http.middlewares=lekkeratlas-backend-redirect"
-      - "traefik.http.routers.lekkeratlas-backend.rule=Host(`backend.lekkeratlas.nl`)"
-      - "traefik.http.routers.lekkeratlas-backend.entrypoints=websecure"
-      - "traefik.http.routers.lekkeratlas-backend.tls.certresolver=le"
-      - "traefik.http.services.lekkeratlas-backend.loadbalancer.server.port=8080"
-      - "traefik.http.middlewares.lekkeratlas-backend-redirect.redirectscheme.scheme=https"
-      - "traefik.http.middlewares.lekkeratlas-backend-redirect.redirectscheme.permanent=true"
+      - "traefik.http.routers.lekkeratlas-backend-api-http.rule=Host(`api.lekkeratlas.nl`)"
+      - "traefik.http.routers.lekkeratlas-backend-api-http.entrypoints=web"
+      - "traefik.http.routers.lekkeratlas-backend-api-http.middlewares=lekkeratlas-api-redirect"
+      - "traefik.http.routers.lekkeratlas-backend-api.rule=Host(`api.lekkeratlas.nl`)"
+      - "traefik.http.routers.lekkeratlas-backend-api.entrypoints=websecure"
+      - "traefik.http.routers.lekkeratlas-backend-api.tls.certresolver=le"
+      - "traefik.http.services.lekkeratlas-backend-api.loadbalancer.server.port=8080"
+      - "traefik.http.middlewares.lekkeratlas-api-redirect.redirectscheme.scheme=https"
+      - "traefik.http.middlewares.lekkeratlas-api-redirect.redirectscheme.permanent=true"
+
+  backend-worker:
+    image: ghcr.io/lekkeratlas/lekkeratlas-backend-worker:latest
+    container_name: lekkeratlas-backend-worker
+    restart: always
+    networks:
+      - public
+      - rabbitmq
+      - lekkeratlas_database
+    environment:
+      # RabbitMQ config
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
 
   database:
     image: ghcr.io/lekkeratlas/lekkeratlas-database:latest
