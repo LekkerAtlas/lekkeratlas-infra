@@ -55,7 +55,7 @@ services:
       - public
     labels:
       - "traefik.enable=true"
-      - "traefik.docker.network=lekkeratlas-infra_public"
+      - "traefik.docker.network=lekkeratlas-public"
       - "traefik.http.routers.lekkeratlas-main-http.rule=Host(`lekkeratlas.nl`)"
       - "traefik.http.routers.lekkeratlas-main-http.entrypoints=web"
       - "traefik.http.routers.lekkeratlas-main-http.middlewares=lekkeratlas-main-redirect"
@@ -99,7 +99,7 @@ services:
       RABBITMQ_PASSWORD: ${RABBITMQ_DEFAULT_PASS}
     labels:
       - "traefik.enable=true"
-      - "traefik.docker.network=lekkeratlas-infra_public"
+      - "traefik.docker.network=lekkeratlas-public"
       - "traefik.http.routers.lekkeratlas-backend-api-http.rule=Host(`api.lekkeratlas.nl`)"
       - "traefik.http.routers.lekkeratlas-backend-api-http.entrypoints=web"
       - "traefik.http.routers.lekkeratlas-backend-api-http.middlewares=lekkeratlas-api-redirect"
@@ -240,7 +240,7 @@ services:
       - authentik
     labels:
       - "traefik.enable=true"
-      - "traefik.docker.network=lekkeratlas-infra_public"
+      - "traefik.docker.network=lekkeratlas-public"
       - "traefik.http.routers.authentik-http.rule=Host(`auth.lekkeratlas.nl`)"
       - "traefik.http.routers.authentik-http.entrypoints=web"
       - "traefik.http.routers.authentik-http.middlewares=authentik-redirect"
@@ -284,10 +284,14 @@ services:
 
 networks:
   public:
+    name: lekkeratlas-public
     internal: false
   lekkeratlas_database:
+    name: lekkeratlas-database
     internal: true
   rabbitmq:
+    name: lekkeratlas-rabbitmq
     internal: true
   authentik:
+    name: lekkeratlas-authentik
     internal: true
