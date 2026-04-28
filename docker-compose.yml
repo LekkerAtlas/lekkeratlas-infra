@@ -70,7 +70,7 @@ services:
       # RabbitMQ config
       SPRING_RABBITMQ_HOST: rabbitmq
       SPRING_RABBITMQ_USERNAME: ${RABBITMQ_DEFAULT_USER}
-      SPRING_RABBITMQ_PASSWORD: ${RABBITMQ_DEFAULT_USER}
+      SPRING_RABBITMQ_PASSWORD: ${RABBITMQ_DEFAULT_PASS}
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=lekkeratlas-infra_public"
@@ -96,7 +96,7 @@ services:
       # RabbitMQ config
       SPRING_RABBITMQ_HOST: rabbitmq
       SPRING_RABBITMQ_USERNAME: ${RABBITMQ_DEFAULT_USER}
-      SPRING_RABBITMQ_PASSWORD: ${RABBITMQ_DEFAULT_USER}
+      SPRING_RABBITMQ_PASSWORD: ${RABBITMQ_DEFAULT_PASS}
 
   database:
     image: ghcr.io/lekkeratlas/lekkeratlas-database:latest
