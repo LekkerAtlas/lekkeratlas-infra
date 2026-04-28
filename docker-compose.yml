@@ -66,9 +66,11 @@ services:
       AUTHENTIK_HOST: https://auth.lekkeratlas.nl
       AUTHENTIK_CLIENT_ID: ${AUTHENTIK_LEKKER_ATLAS_CLIENT_ID}
       AUTHENTIK_CLIENT_SECRET: ${AUTHENTIK_LEKKER_ATLAS_CLIENT_SECRET}
+      
       # RabbitMQ config
-      RABBITMQ_HOST: rabbitmq
-      RABBITMQ_PORT: 5672
+      SPRING_RABBITMQ_HOST: rabbitmq
+      SPRING_RABBITMQ_USERNAME: ${RABBITMQ_DEFAULT_USER}
+      SPRING_RABBITMQ_PASSWORD: ${RABBITMQ_DEFAULT_USER}
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=lekkeratlas-infra_public"
@@ -92,8 +94,9 @@ services:
       - lekkeratlas_database
     environment:
       # RabbitMQ config
-      RABBITMQ_HOST: rabbitmq
-      RABBITMQ_PORT: 5672
+      SPRING_RABBITMQ_HOST: rabbitmq
+      SPRING_RABBITMQ_USERNAME: ${RABBITMQ_DEFAULT_USER}
+      SPRING_RABBITMQ_PASSWORD: ${RABBITMQ_DEFAULT_USER}
 
   database:
     image: ghcr.io/lekkeratlas/lekkeratlas-database:latest
