@@ -67,7 +67,7 @@ services:
       - "traefik.http.middlewares.lekkeratlas-main-redirect.redirectscheme.permanent=true"
 
   backend-api:
-    image: ghcr.io/lekkeratlas/lekkeratlas-backend-api:latest
+    image: ghcr.io/lekkeratlas/lekkeratlas-backend-api:experimental
     container_name: lekkeratlas-backend
     restart: always
     depends_on:
@@ -136,7 +136,7 @@ services:
       RABBITMQ_PASSWORD: ${RABBITMQ_DEFAULT_PASS}
 
   database:
-    image: ghcr.io/lekkeratlas/lekkeratlas-database:experimental
+    image: ghcr.io/lekkeratlas/lekkeratlas-database:latest
     container_name: lekkeratlas-database
     restart: always
     environment:
