@@ -1,10 +1,18 @@
-version: '3.8'
-
 services:
+
+  # Traefik for network routing
+
   traefik:
     image: traefik:v3.6.11
-    container_name: traefik_lekkeratlas
+    container_name: traefik
     restart: always
+    depends_on:
+      frontend:
+        condition: service_started
+      backend-api:
+        condition: service_started
+      authentik-server:
+        condition: service_started
     command:
       - "--providers.docker=true"
       - "--providers.file.directory=/etc/traefik"
@@ -19,7 +27,7 @@ services:
     ports:
       - "80:80"
       - "443:443"
-      - "8080:8080" # TODO Add working dashboard
+      # - "127.0.0.1:8081:8080" # Optional local-only debug binding for the Traefik dashboard
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - ./traefik:/etc/traefik
@@ -28,17 +36,26 @@ services:
       - ACME_EMAIL=${ACME_EMAIL}
       - TRANSIP_ACCOUNT_NAME=${TRANSIP_ACCOUNT_NAME}
       - TRANSIP_PRIVATE_KEY_PATH=/etc/traefik/transip.key
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.traefik.entrypoints=websecure"
-      - "traefik.http.routers.traefik.service=api@internal"
+    networks:
+      - public
+
+  # Core application components:
 
   frontend:
     image: ghcr.io/lekkeratlas/lekkeratlas-application:latest
-    container_name: frontend
+    container_name: lekkeratlas-frontend
     restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost/ >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    networks:
+      - public
     labels:
       - "traefik.enable=true"
+      - "traefik.docker.network=lekkeratlas-public"
       - "traefik.http.routers.lekkeratlas-main-http.rule=Host(`lekkeratlas.nl`)"
       - "traefik.http.routers.lekkeratlas-main-http.entrypoints=web"
       - "traefik.http.routers.lekkeratlas-main-http.middlewares=lekkeratlas-main-redirect"
@@ -49,18 +66,241 @@ services:
       - "traefik.http.middlewares.lekkeratlas-main-redirect.redirectscheme.scheme=https"
       - "traefik.http.middlewares.lekkeratlas-main-redirect.redirectscheme.permanent=true"
 
-  backend:
-    image: ghcr.io/lekkeratlas/lekkeratlas-backend:latest
-    container_name: backend
+  backend-api:
+    image: ghcr.io/lekkeratlas/lekkeratlas-backend-api:experimental
+    container_name: lekkeratlas-backend
     restart: always
+    depends_on:
+      database:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      authentik-server:
+        condition: service_started
+    networks:
+      - public
+      - rabbitmq
+      - lekkeratlas_database
+    environment:
+      # OIDC config
+      AUTHENTIK_HOST: https://auth.lekkeratlas.nl
+      AUTHENTIK_CLIENT_ID: ${AUTHENTIK_LEKKER_ATLAS_CLIENT_ID}
+      AUTHENTIK_CLIENT_SECRET: ${AUTHENTIK_LEKKER_ATLAS_CLIENT_SECRET}
+      
+      # RabbitMQ config
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_USERNAME: ${RABBITMQ_DEFAULT_USER}
+      RABBITMQ_PASSWORD: ${RABBITMQ_DEFAULT_PASS}
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.lekkeratlas-backend-http.rule=Host(`backend.lekkeratlas.nl`)"
-      - "traefik.http.routers.lekkeratlas-backend-http.entrypoints=web"
-      - "traefik.http.routers.lekkeratlas-backend-http.middlewares=lekkeratlas-backend-redirect"
-      - "traefik.http.routers.lekkeratlas-backend.rule=Host(`backend.lekkeratlas.nl`)"
-      - "traefik.http.routers.lekkeratlas-backend.entrypoints=websecure"
-      - "traefik.http.routers.lekkeratlas-backend.tls.certresolver=le"
-      - "traefik.http.services.lekkeratlas-backend.loadbalancer.server.port=8080"
-      - "traefik.http.middlewares.lekkeratlas-backend-redirect.redirectscheme.scheme=https"
-      - "traefik.http.middlewares.lekkeratlas-backend-redirect.redirectscheme.permanent=true"
+      - "traefik.docker.network=lekkeratlas-public"
+      - "traefik.http.routers.lekkeratlas-backend-api-http.rule=Host(`api.lekkeratlas.nl`)"
+      - "traefik.http.routers.lekkeratlas-backend-api-http.entrypoints=web"
+      - "traefik.http.routers.lekkeratlas-backend-api-http.middlewares=lekkeratlas-api-redirect"
+      - "traefik.http.routers.lekkeratlas-backend-api.rule=Host(`api.lekkeratlas.nl`)"
+      - "traefik.http.routers.lekkeratlas-backend-api.entrypoints=websecure"
+      - "traefik.http.routers.lekkeratlas-backend-api.tls.certresolver=le"
+      - "traefik.http.services.lekkeratlas-backend-api.loadbalancer.server.port=8080"
+      - "traefik.http.middlewares.lekkeratlas-api-redirect.redirectscheme.scheme=https"
+      - "traefik.http.middlewares.lekkeratlas-api-redirect.redirectscheme.permanent=true"
+
+  backend-worker:
+    image: ghcr.io/lekkeratlas/lekkeratlas-backend-worker:experimental
+    container_name: lekkeratlas-backend-worker
+    restart: always
+    depends_on:
+      database:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - public
+      - rabbitmq
+      - lekkeratlas_database
+    environment:
+      # RabbitMQ config
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_USERNAME: ${RABBITMQ_DEFAULT_USER}
+      RABBITMQ_PASSWORD: ${RABBITMQ_DEFAULT_PASS}
+
+  database:
+    image: ghcr.io/lekkeratlas/lekkeratlas-database:latest
+    container_name: lekkeratlas-database
+    restart: always
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - pg_isready -d $${POSTGRES_DB} -U $${POSTGRES_USER}
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    volumes:
+      - /data/database:/var/lib/postgresql/data
+    # ports:
+    #   - "127.0.0.1:5432:5432" # Optional local-only debug binding for PostgreSQL
+    networks:
+      - lekkeratlas_database
+
+  # Queue logic components:
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: lekkeratlas-rabbitmq
+    restart: always
+    environment:
+      - RABBITMQ_DEFAULT_USER=${RABBITMQ_DEFAULT_USER}
+      - RABBITMQ_DEFAULT_PASS=${RABBITMQ_DEFAULT_PASS}
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    expose:
+      - "5672" # AMQP; only used internally by backend and workers
+      - "15672" # Management UI; exposed only through Traefik + Authentik
+    # ports:
+    #   - "127.0.0.1:15673:15672" # Optional local-only debug binding for the RabbitMQ management UI
+    networks:
+      - rabbitmq
+      - public
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=lekkeratlas-public"
+      - "traefik.http.routers.rabbitmq-management-http.rule=Host(`rabbitmq.lekkeratlas.nl`)"
+      - "traefik.http.routers.rabbitmq-management-http.entrypoints=web"
+      - "traefik.http.routers.rabbitmq-management-http.middlewares=rabbitmq-management-redirect"
+      - "traefik.http.routers.rabbitmq-management.rule=Host(`rabbitmq.lekkeratlas.nl`)"
+      - "traefik.http.routers.rabbitmq-management.entrypoints=websecure"
+      - "traefik.http.routers.rabbitmq-management.tls.certresolver=le"
+      - "traefik.http.routers.rabbitmq-management.middlewares=authentik-forward-auth@docker"
+      - "traefik.http.services.rabbitmq-management.loadbalancer.server.port=15672"
+      - "traefik.http.middlewares.rabbitmq-management-redirect.redirectscheme.scheme=https"
+      - "traefik.http.middlewares.rabbitmq-management-redirect.redirectscheme.permanent=true"
+
+  # Authentik container components:
+
+  authentik-postgresql:
+    image: postgres:16-alpine
+    container_name: authentik-postgres
+    restart: always
+    environment:
+      - POSTGRES_USER=${AUTHENTIK_POSTGRES_USER}
+      - POSTGRES_PASSWORD=${AUTHENTIK_POSTGRES_PASSWORD}
+      - POSTGRES_DB=${AUTHENTIK_POSTGRES_DB:-authentik}
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - pg_isready -d $${POSTGRES_DB} -U $${POSTGRES_USER}
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    volumes:
+      - /data/authentik/postgresql:/var/lib/postgresql/data
+    # ports:
+    #   - "127.0.0.1:5433:5432" # Optional local-only debug binding for Authentik PostgreSQL
+    networks:
+      - authentik
+
+  authentik-server:
+    image: ${AUTHENTIK_IMAGE:-ghcr.io/goauthentik/server}:${AUTHENTIK_TAG:-2026.2.2}
+    container_name: lekkeratlas-authentik-server
+    restart: always
+    command: server
+    depends_on:
+      authentik-postgresql:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "ak healthcheck"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    environment:
+      - AUTHENTIK_SECRET_KEY=${AUTHENTIK_SECRET_KEY}
+      - AUTHENTIK_ERROR_REPORTING__ENABLED=false
+      - AUTHENTIK_POSTGRESQL__HOST=authentik-postgresql
+      - AUTHENTIK_POSTGRESQL__PORT=5432
+      - AUTHENTIK_POSTGRESQL__USER=${AUTHENTIK_POSTGRES_USER}
+      - AUTHENTIK_POSTGRESQL__NAME=${AUTHENTIK_POSTGRES_DB:-authentik}
+      - AUTHENTIK_POSTGRESQL__PASSWORD=${AUTHENTIK_POSTGRES_PASSWORD}
+    shm_size: 512mb
+    volumes:
+      - /data/authentik/media:/data
+      - ./custom-templates:/templates
+    # ports:
+    #   - "127.0.0.1:9000:9000" # Optional local-only debug binding for Authentik server
+    networks:
+      - public
+      - authentik
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=lekkeratlas-public"
+      - "traefik.http.routers.authentik-http.rule=Host(`auth.lekkeratlas.nl`)"
+      - "traefik.http.routers.authentik-http.entrypoints=web"
+      - "traefik.http.routers.authentik-http.middlewares=authentik-redirect"
+      - "traefik.http.middlewares.authentik-redirect.redirectscheme.scheme=https"
+      - "traefik.http.routers.authentik.rule=Host(`auth.lekkeratlas.nl`)"
+      - "traefik.http.routers.authentik.entrypoints=websecure"
+      - "traefik.http.routers.authentik.tls.certresolver=le"
+      - "traefik.http.services.authentik.loadbalancer.server.port=9000"
+      - "traefik.http.middlewares.authentik-redirect.redirectscheme.permanent=true"
+      - "traefik.http.routers.authentik-outpost-rabbitmq.rule=Host(`rabbitmq.lekkeratlas.nl`) && PathPrefix(`/outpost.goauthentik.io/`)"
+      - "traefik.http.routers.authentik-outpost-rabbitmq.entrypoints=websecure"
+      - "traefik.http.routers.authentik-outpost-rabbitmq.tls.certresolver=le"
+      - "traefik.http.routers.authentik-outpost-rabbitmq.priority=15"
+      - "traefik.http.routers.authentik-outpost-rabbitmq.service=authentik"
+      - "traefik.http.middlewares.authentik-forward-auth.forwardauth.address=http://lekkeratlas-authentik-server:9000/outpost.goauthentik.io/auth/traefik"
+      - "traefik.http.middlewares.authentik-forward-auth.forwardauth.trustForwardHeader=true"
+      - "traefik.http.middlewares.authentik-forward-auth.forwardauth.authResponseHeaders=X-authentik-username,X-authentik-groups,X-authentik-entitlements,X-authentik-email,X-authentik-name,X-authentik-uid,X-authentik-jwt,X-authentik-meta-jwks,X-authentik-meta-outpost,X-authentik-meta-provider,X-authentik-meta-app,X-authentik-meta-version"
+
+  authentik-worker:
+    image: ${AUTHENTIK_IMAGE:-ghcr.io/goauthentik/server}:${AUTHENTIK_TAG:-2026.2.2}
+    container_name: lekkeratlas-authentik-worker
+    restart: always
+    command: worker
+    depends_on:
+      authentik-postgresql:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "ak healthcheck"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    environment:
+      - AUTHENTIK_SECRET_KEY=${AUTHENTIK_SECRET_KEY}
+      - AUTHENTIK_POSTGRESQL__HOST=authentik-postgresql
+      - AUTHENTIK_POSTGRESQL__PORT=5432
+      - AUTHENTIK_POSTGRESQL__USER=${AUTHENTIK_POSTGRES_USER}
+      - AUTHENTIK_POSTGRESQL__NAME=${AUTHENTIK_POSTGRES_DB:-authentik}
+      - AUTHENTIK_POSTGRESQL__PASSWORD=${AUTHENTIK_POSTGRES_PASSWORD}
+    shm_size: 512mb
+    user: root
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /data/authentik/media:/data
+      - ./certs:/certs
+      - ./custom-templates:/templates
+    networks:
+      - authentik
+
+networks:
+  public:
+    name: lekkeratlas-public
+    internal: false
+  lekkeratlas_database:
+    name: lekkeratlas-database
+    internal: true
+  rabbitmq:
+    name: lekkeratlas-rabbitmq
+    internal: true
+  authentik:
+    name: lekkeratlas-authentik
+    internal: true

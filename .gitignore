@@ -3,4 +3,4 @@ traefik/transip.key
 traefik/letsencrypt
 
 # Secrets
-.env
+.env*
