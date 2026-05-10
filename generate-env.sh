@@ -6,8 +6,11 @@ ENV_FILE=".env"
 
 echo "🔐 Generating .env file..."
 
-# Backup existing .env if it exists
+OLD_ENV_EXISTS=false
+
 if [ -f "$ENV_FILE" ]; then
+  OLD_ENV_EXISTS=true
+
   TIMESTAMP=$(date +"%Y%m%d-%H%M%S")
   BACKUP_FILE="${ENV_FILE}.backup-${TIMESTAMP}"
 
@@ -20,27 +23,54 @@ gen_secret() {
   openssl rand -base64 32 | tr -d '\n'
 }
 
-# Helper: prompt for required input
-prompt_required() {
+# Helper: read existing env value if available
+get_existing_env_value() {
+  local key=$1
+
+  if [ "$OLD_ENV_EXISTS" = true ]; then
+    grep -E "^${key}=" "$ENV_FILE" 2>/dev/null | head -n1 | cut -d'=' -f2-
+  fi
+}
+
+# Helper: prompt required value with optional reuse from old env
+prompt_required_with_existing() {
   local var_name=$1
   local prompt_text=$2
 
-  read -rp "$prompt_text: " value
+  local existing_value
+  existing_value=$(get_existing_env_value "$var_name")
+
+  if [ -n "$existing_value" ]; then
+    read -rp "$prompt_text [Press enter to reuse existing value]: " value
+    value=${value:-$existing_value}
+  else
+    read -rp "$prompt_text: " value
+  fi
+
   if [ -z "$value" ]; then
     echo "❌ $var_name cannot be empty"
     exit 1
   fi
+
   echo "$value"
 }
 
-# Helper: prompt optional with default
-prompt_optional() {
+# Helper: prompt optional value with optional reuse from old env
+prompt_optional_with_existing() {
   local var_name=$1
   local prompt_text=$2
   local default_value=$3
 
-  read -rp "$prompt_text [$default_value]: " value
-  echo "${value:-$default_value}"
+  local existing_value
+  existing_value=$(get_existing_env_value "$var_name")
+
+  if [ -n "$existing_value" ]; then
+    read -rp "$prompt_text [$existing_value]: " value
+    echo "${value:-$existing_value}"
+  else
+    read -rp "$prompt_text [$default_value]: " value
+    echo "${value:-$default_value}"
+  fi
 }
 
 # === Prompt for important secrets ===
@@ -48,35 +78,48 @@ prompt_optional() {
 echo ""
 echo "👉 Required external configuration"
 
-ACME_EMAIL=$(prompt_required "ACME_EMAIL" "Enter ACME email (Let's Encrypt)")
-TRANSIP_ACCOUNT_NAME=$(prompt_required "TRANSIP_ACCOUNT_NAME" "Enter TransIP account name")
+ACME_EMAIL=$(prompt_required_with_existing "ACME_EMAIL" "Enter ACME email (Let's Encrypt)")
+TRANSIP_ACCOUNT_NAME=$(prompt_required_with_existing "TRANSIP_ACCOUNT_NAME" "Enter TransIP account name")
 
 echo ""
 echo "👉 Required backend configuration"
 
-AUTHENTIK_LEKKER_ATLAS_CLIENT_ID=$(prompt_required "AUTHENTIK_LEKKER_ATLAS_CLIENT_ID" "Enter Authentik client ID (for the LekkerAtlas application)")
-AUTHENTIK_LEKKER_ATLAS_CLIENT_SECRET=$(prompt_required "AUTHENTIK_LEKKER_ATLAS_CLIENT_SECRET" "Enter Authentik client secret (for the LekkerAtlas application)")
+AUTHENTIK_LEKKER_ATLAS_CLIENT_ID=$(prompt_required_with_existing "AUTHENTIK_LEKKER_ATLAS_CLIENT_ID" "Enter Authentik client ID (for the LekkerAtlas application)")
+AUTHENTIK_LEKKER_ATLAS_CLIENT_SECRET=$(prompt_required_with_existing "AUTHENTIK_LEKKER_ATLAS_CLIENT_SECRET" "Enter Authentik client secret (for the LekkerAtlas application)")
 
 echo ""
 echo "👉 Database config (main app)"
 
-POSTGRES_USER=$(prompt_optional "POSTGRES_USER" "Postgres user" "postgres")
-POSTGRES_DB=$(prompt_optional "POSTGRES_DB" "Postgres DB name" "lekkeratlas")
-POSTGRES_PASSWORD=$(gen_secret)
+POSTGRES_USER=$(prompt_optional_with_existing "POSTGRES_USER" "Postgres user" "postgres")
+POSTGRES_DB=$(prompt_optional_with_existing "POSTGRES_DB" "Postgres DB name" "lekkeratlas")
+POSTGRES_PASSWORD=$(get_existing_env_value "POSTGRES_PASSWORD")
+POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-$(gen_secret)}
 
 echo ""
 echo "👉 Generating internal secrets..."
 
 # === Generated secrets ===
 
-RABBITMQ_DEFAULT_USER="rabbitmq"
-RABBITMQ_DEFAULT_PASS=$(gen_secret)
+RABBITMQ_DEFAULT_USER=$(get_existing_env_value "RABBITMQ_DEFAULT_USER")
+RABBITMQ_DEFAULT_USER=${RABBITMQ_DEFAULT_USER:-rabbitmq}
 
-AUTHENTIK_SECRET_KEY=$(gen_secret)
+RABBITMQ_DEFAULT_PASS=$(get_existing_env_value "RABBITMQ_DEFAULT_PASS")
+RABBITMQ_DEFAULT_PASS=${RABBITMQ_DEFAULT_PASS:-$(gen_secret)}
 
-AUTHENTIK_POSTGRES_USER="authentik"
-AUTHENTIK_POSTGRES_PASSWORD=$(gen_secret)
-AUTHENTIK_POSTGRES_DB="authentik"
+AUTHENTIK_SECRET_KEY=$(get_existing_env_value "AUTHENTIK_SECRET_KEY")
+AUTHENTIK_SECRET_KEY=${AUTHENTIK_SECRET_KEY:-$(gen_secret)}
+
+AUTHENTIK_WEBHOOK_SECRET=$(get_existing_env_value "AUTHENTIK_WEBHOOK_SECRET")
+AUTHENTIK_WEBHOOK_SECRET=${AUTHENTIK_WEBHOOK_SECRET:-$(gen_secret)}
+
+AUTHENTIK_POSTGRES_USER=$(get_existing_env_value "AUTHENTIK_POSTGRES_USER")
+AUTHENTIK_POSTGRES_USER=${AUTHENTIK_POSTGRES_USER:-authentik}
+
+AUTHENTIK_POSTGRES_PASSWORD=$(get_existing_env_value "AUTHENTIK_POSTGRES_PASSWORD")
+AUTHENTIK_POSTGRES_PASSWORD=${AUTHENTIK_POSTGRES_PASSWORD:-$(gen_secret)}
+
+AUTHENTIK_POSTGRES_DB=$(get_existing_env_value "AUTHENTIK_POSTGRES_DB")
+AUTHENTIK_POSTGRES_DB=${AUTHENTIK_POSTGRES_DB:-authentik}
 
 # === Write .env ===
 
@@ -120,6 +163,7 @@ RABBITMQ_DEFAULT_PASS=$RABBITMQ_DEFAULT_PASS
 # ================================
 
 AUTHENTIK_SECRET_KEY=$AUTHENTIK_SECRET_KEY
+AUTHENTIK_WEBHOOK_SECRET=$AUTHENTIK_WEBHOOK_SECRET
 
 AUTHENTIK_POSTGRES_USER=$AUTHENTIK_POSTGRES_USER
 AUTHENTIK_POSTGRES_PASSWORD=$AUTHENTIK_POSTGRES_PASSWORD
