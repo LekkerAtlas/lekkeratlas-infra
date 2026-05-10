@@ -99,13 +99,18 @@ services:
       AUTHENTIK_CLIENT_ID: ${AUTHENTIK_LEKKER_ATLAS_CLIENT_ID}
       
       # Webhook config
-      AUTHENTIK_WEBHOOK_SECRET_ALLOWED_SOURCE_CIDRS: 172.16.0.0/12
+      AUTHENTIK_WEBHOOK_SECRET_ALLOWED_SOURCE_CIDRS: 172.16.0.0/12 # Whitelist the whole docker private network so authentik can reach the webhook
       AUTHENTIK_WEBHOOK_SECRET: ${AUTHENTIK_WEBHOOK_SECRET}
 
       # RabbitMQ config
       RABBITMQ_HOST: rabbitmq
       RABBITMQ_USERNAME: ${RABBITMQ_DEFAULT_USER}
       RABBITMQ_PASSWORD: ${RABBITMQ_DEFAULT_PASS}
+
+      # Database config
+      DATASOURCE_URL: jdbc:postgresql://lekkeratlas-database:5432/${POSTGRES_DB}
+      DATASOURCE_USERNAME: ${POSTGRES_USER}
+      DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=lekkeratlas-public"
@@ -137,6 +142,11 @@ services:
       RABBITMQ_HOST: rabbitmq
       RABBITMQ_USERNAME: ${RABBITMQ_DEFAULT_USER}
       RABBITMQ_PASSWORD: ${RABBITMQ_DEFAULT_PASS}
+
+      # Database config
+      DATASOURCE_URL: jdbc:postgresql://lekkeratlas-database:5432/${POSTGRES_DB}
+      DATASOURCE_USERNAME: ${POSTGRES_USER}
+      DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
 
   database:
     image: ghcr.io/lekkeratlas/lekkeratlas-database:latest
