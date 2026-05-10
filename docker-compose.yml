@@ -53,6 +53,14 @@ services:
       timeout: 5s
       retries: 5
       start_period: 20s
+
+    environment:
+      AUTH_AUTHORITY: https://auth.lekkeratlas.nl/application/o/lekker-atlas/
+      AUTH_CLIENT_ID: ${AUTHENTIK_LEKKER_ATLAS_CLIENT_ID}
+      AUTH_REDIRECT_URI: https://lekkeratlas.nl
+      AUTH_POST_LOGOUT_REDIRECT_URI: https://lekkeratlas.nl
+      API_BASE_URL: https://api.lekkeratlas.nl
+
     networks:
       - public
     labels:
@@ -89,7 +97,6 @@ services:
       # OIDC config
       AUTHENTIK_HOST: https://auth.lekkeratlas.nl
       AUTHENTIK_CLIENT_ID: ${AUTHENTIK_LEKKER_ATLAS_CLIENT_ID}
-      AUTHENTIK_CLIENT_SECRET: ${AUTHENTIK_LEKKER_ATLAS_CLIENT_SECRET}
       
       # Webhook config
       AUTHENTIK_WEBHOOK_SECRET: ${AUTHENTIK_WEBHOOK_SECRET}
