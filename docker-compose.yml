@@ -15,6 +15,8 @@ services:
         condition: service_started
     command:
       - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--providers.docker.network=lekkeratlas-public"
       - "--providers.file.directory=/etc/traefik"
       - "--entrypoints.web.address=:80"
       - "--entrypoints.websecure.address=:443"
@@ -59,9 +61,11 @@ services:
       - "traefik.http.routers.lekkeratlas-main-http.rule=Host(`lekkeratlas.nl`)"
       - "traefik.http.routers.lekkeratlas-main-http.entrypoints=web"
       - "traefik.http.routers.lekkeratlas-main-http.middlewares=lekkeratlas-main-redirect"
+      - "traefik.http.routers.lekkeratlas-main-http.service=lekkeratlas-main"
       - "traefik.http.routers.lekkeratlas-main.rule=Host(`lekkeratlas.nl`)"
       - "traefik.http.routers.lekkeratlas-main.entrypoints=websecure"
       - "traefik.http.routers.lekkeratlas-main.tls.certresolver=le"
+      - "traefik.http.routers.lekkeratlas-main.service=lekkeratlas-main"
       - "traefik.http.services.lekkeratlas-main.loadbalancer.server.port=80"
       - "traefik.http.middlewares.lekkeratlas-main-redirect.redirectscheme.scheme=https"
       - "traefik.http.middlewares.lekkeratlas-main-redirect.redirectscheme.permanent=true"
