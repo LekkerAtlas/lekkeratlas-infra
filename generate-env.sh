@@ -86,7 +86,6 @@ echo "👉 Required backend configuration"
 
 
 AUTHENTIK_LEKKER_ATLAS_CLIENT_ID=$(prompt_required_with_existing "AUTHENTIK_LEKKER_ATLAS_CLIENT_ID" "Enter Authentik client ID (for the LekkerAtlas application)")
-AUTHENTIK_LEKKER_ATLAS_CLIENT_SECRET=$(prompt_required_with_existing "AUTHENTIK_LEKKER_ATLAS_CLIENT_SECRET" "Enter Authentik client secret (for the LekkerAtlas application)")
 
 echo ""
 echo "👉 WireGuard VPN config (worker VPN)"
@@ -149,7 +148,6 @@ TRANSIP_ACCOUNT_NAME=$TRANSIP_ACCOUNT_NAME
 
 # Authentik OIDC
 AUTHENTIK_LEKKER_ATLAS_CLIENT_ID=$AUTHENTIK_LEKKER_ATLAS_CLIENT_ID
-AUTHENTIK_LEKKER_ATLAS_CLIENT_SECRET=$AUTHENTIK_LEKKER_ATLAS_CLIENT_SECRET
 
 # WireGuard VPN (worker)
 WIREGUARD_PRIVATE_KEY=$WIREGUARD_PRIVATE_KEY
