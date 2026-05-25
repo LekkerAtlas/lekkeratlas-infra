@@ -15,6 +15,8 @@ services:
         condition: service_started
     command:
       - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--providers.docker.network=lekkeratlas-public"
       - "--providers.file.directory=/etc/traefik"
       - "--entrypoints.web.address=:80"
       - "--entrypoints.websecure.address=:443"
@@ -46,11 +48,19 @@ services:
     container_name: lekkeratlas-frontend
     restart: always
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost/ >/dev/null 2>&1 || exit 1"]
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1/index.html || exit 1"]
       interval: 30s
       timeout: 5s
       retries: 5
       start_period: 20s
+
+    environment:
+      AUTH_AUTHORITY: https://auth.lekkeratlas.nl/application/o/lekker-atlas/
+      AUTH_CLIENT_ID: ${AUTHENTIK_LEKKER_ATLAS_CLIENT_ID}
+      AUTH_REDIRECT_URI: https://lekkeratlas.nl
+      AUTH_POST_LOGOUT_REDIRECT_URI: https://lekkeratlas.nl
+      API_BASE_URL: https://api.lekkeratlas.nl
+
     networks:
       - public
     labels:
@@ -59,9 +69,11 @@ services:
       - "traefik.http.routers.lekkeratlas-main-http.rule=Host(`lekkeratlas.nl`)"
       - "traefik.http.routers.lekkeratlas-main-http.entrypoints=web"
       - "traefik.http.routers.lekkeratlas-main-http.middlewares=lekkeratlas-main-redirect"
+      - "traefik.http.routers.lekkeratlas-main-http.service=lekkeratlas-main"
       - "traefik.http.routers.lekkeratlas-main.rule=Host(`lekkeratlas.nl`)"
       - "traefik.http.routers.lekkeratlas-main.entrypoints=websecure"
       - "traefik.http.routers.lekkeratlas-main.tls.certresolver=le"
+      - "traefik.http.routers.lekkeratlas-main.service=lekkeratlas-main"
       - "traefik.http.services.lekkeratlas-main.loadbalancer.server.port=80"
       - "traefik.http.middlewares.lekkeratlas-main-redirect.redirectscheme.scheme=https"
       - "traefik.http.middlewares.lekkeratlas-main-redirect.redirectscheme.permanent=true"
@@ -85,15 +97,20 @@ services:
       # OIDC config
       AUTHENTIK_HOST: https://auth.lekkeratlas.nl
       AUTHENTIK_CLIENT_ID: ${AUTHENTIK_LEKKER_ATLAS_CLIENT_ID}
-      AUTHENTIK_CLIENT_SECRET: ${AUTHENTIK_LEKKER_ATLAS_CLIENT_SECRET}
       
       # Webhook config
+      AUTHENTIK_WEBHOOK_SECRET_ALLOWED_SOURCE_CIDRS: 172.16.0.0/12 # Whitelist the whole docker private network so authentik can reach the webhook
       AUTHENTIK_WEBHOOK_SECRET: ${AUTHENTIK_WEBHOOK_SECRET}
 
       # RabbitMQ config
       RABBITMQ_HOST: rabbitmq
       RABBITMQ_USERNAME: ${RABBITMQ_DEFAULT_USER}
       RABBITMQ_PASSWORD: ${RABBITMQ_DEFAULT_PASS}
+
+      # Database config
+      DATASOURCE_URL: jdbc:postgresql://lekkeratlas-database:5432/${POSTGRES_DB}
+      DATASOURCE_USERNAME: ${POSTGRES_USER}
+      DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=lekkeratlas-public"
@@ -125,6 +142,11 @@ services:
       RABBITMQ_HOST: rabbitmq
       RABBITMQ_USERNAME: ${RABBITMQ_DEFAULT_USER}
       RABBITMQ_PASSWORD: ${RABBITMQ_DEFAULT_PASS}
+
+      # Database config
+      DATASOURCE_URL: jdbc:postgresql://lekkeratlas-database:5432/${POSTGRES_DB}
+      DATASOURCE_USERNAME: ${POSTGRES_USER}
+      DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
 
   database:
     image: ghcr.io/lekkeratlas/lekkeratlas-database:latest
