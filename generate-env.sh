@@ -84,8 +84,18 @@ TRANSIP_ACCOUNT_NAME=$(prompt_required_with_existing "TRANSIP_ACCOUNT_NAME" "Ent
 echo ""
 echo "👉 Required backend configuration"
 
+
 AUTHENTIK_LEKKER_ATLAS_CLIENT_ID=$(prompt_required_with_existing "AUTHENTIK_LEKKER_ATLAS_CLIENT_ID" "Enter Authentik client ID (for the LekkerAtlas application)")
 AUTHENTIK_LEKKER_ATLAS_CLIENT_SECRET=$(prompt_required_with_existing "AUTHENTIK_LEKKER_ATLAS_CLIENT_SECRET" "Enter Authentik client secret (for the LekkerAtlas application)")
+
+echo ""
+echo "👉 WireGuard VPN config (worker VPN)"
+
+WIREGUARD_PRIVATE_KEY=$(prompt_required_with_existing "WIREGUARD_PRIVATE_KEY" "Enter WireGuard private key")
+WIREGUARD_ADDRESSES=$(prompt_required_with_existing "WIREGUARD_ADDRESSES" "Enter WireGuard addresses")
+WIREGUARD_ENDPOINT_IP=$(prompt_required_with_existing "WIREGUARD_ENDPOINT_IP" "Enter WireGuard endpoint IP")
+WIREGUARD_ENDPOINT_PORT=$(prompt_required_with_existing "WIREGUARD_ENDPOINT_PORT" "Enter WireGuard endpoint port")
+WIREGUARD_PUBLIC_KEY=$(prompt_required_with_existing "WIREGUARD_PUBLIC_KEY" "Enter WireGuard public key")
 
 echo ""
 echo "👉 Database config (main app)"
@@ -136,9 +146,17 @@ TRANSIP_ACCOUNT_NAME=$TRANSIP_ACCOUNT_NAME
 # Backend config
 # ================================
 
+
 # Authentik OIDC
 AUTHENTIK_LEKKER_ATLAS_CLIENT_ID=$AUTHENTIK_LEKKER_ATLAS_CLIENT_ID
 AUTHENTIK_LEKKER_ATLAS_CLIENT_SECRET=$AUTHENTIK_LEKKER_ATLAS_CLIENT_SECRET
+
+# WireGuard VPN (worker)
+WIREGUARD_PRIVATE_KEY=$WIREGUARD_PRIVATE_KEY
+WIREGUARD_ADDRESSES=$WIREGUARD_ADDRESSES
+WIREGUARD_ENDPOINT_IP=$WIREGUARD_ENDPOINT_IP
+WIREGUARD_ENDPOINT_PORT=$WIREGUARD_ENDPOINT_PORT
+WIREGUARD_PUBLIC_KEY=$WIREGUARD_PUBLIC_KEY
 
 
 # ================================
