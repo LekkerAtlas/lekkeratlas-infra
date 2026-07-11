@@ -77,6 +77,10 @@ prompt_optional_with_existing() {
   fi
 }
 
+# Reused vars
+lekkeratlas_frontend_fqdn="https://lekkeratlas.nl"
+lekkeratlas_backend_fqdn="https://api.lekkeratlas.nl"
+
 echo ""
 echo "👉 Required external configuration"
 
@@ -115,14 +119,14 @@ AUTHENTIK_LEKKERATLAS_REDIRECT_URI=$(
   prompt_optional_with_existing \
     "AUTHENTIK_LEKKERATLAS_REDIRECT_URI" \
     "LekkerAtlas redirect and logout URI" \
-    "https://lekkeratlas.nl"
+    "$lekkeratlas_frontend_fqdn"
 )
 
 AUTHENTIK_LEKKERATLAS_WEBHOOK_FQDN=$(
   prompt_optional_with_existing \
     "AUTHENTIK_LEKKERATLAS_WEBHOOK_FQDN" \
     "Backend URL used by the Authentik webhook" \
-    "http://backend-api:8080"
+    "$lekkeratlas_backend_fqdn/webhooks/authentik"
 )
 
 echo ""
@@ -238,14 +242,14 @@ AUTHENTIK_PROVIDER_FOR_LEKKERATLAS_CLIENT_SECRET=$(
   get_existing_env_value "AUTHENTIK_PROVIDER_FOR_LEKKERATLAS_CLIENT_SECRET"
 )
 AUTHENTIK_PROVIDER_FOR_LEKKERATLAS_CLIENT_SECRET=${
-  AUTHENTIK_PROVIDER_FOR_LEKKERATLAS_CLIENT_SECRET:-$(gen_secret)
+  AUTHENTIK_PROVIDER_FOR_LEKKERATLAS_CLIENT_SECRET:-"$(gen_secret)"
 }
 
 AUTHENTIK_RABBITMQ_CLIENT_SECRET=$(
   get_existing_env_value "AUTHENTIK_RABBITMQ_CLIENT_SECRET"
 )
 AUTHENTIK_RABBITMQ_CLIENT_SECRET=${
-  AUTHENTIK_RABBITMQ_CLIENT_SECRET:-$(gen_secret)
+  AUTHENTIK_RABBITMQ_CLIENT_SECRET:-"$(gen_secret)"
 }
 
 # The backend and Authentik webhook blueprint must use the same bearer token.
