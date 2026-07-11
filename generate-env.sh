@@ -111,8 +111,8 @@ echo "👉 Authentik production URLs"
 AUTHENTIK_LEKKERATLAS_FQDN=$(
   prompt_optional_with_existing \
     "AUTHENTIK_LEKKERATLAS_FQDN" \
-    "Authentik public FQDN" \
-    "https://auth.lekkeratlas.nl"
+    "Authentik frontend FQDN" \
+    "$lekkeratlas_frontend_fqdn"
 )
 
 AUTHENTIK_LEKKERATLAS_REDIRECT_URI=$(
