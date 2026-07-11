@@ -290,9 +290,6 @@ services:
       AUTHENTIK_BOOTSTRAP_PASSWORD: ${AUTHENTIK_BOOTSTRAP_PASSWORD}
       AUTHENTIK_BOOTSTRAP_TOKEN: ${AUTHENTIK_BOOTSTRAP_TOKEN}
     shm_size: 512mb
-    volumes:
-      - /data/authentik/media:/data
-      - ./custom-templates:/templates
     # ports:
     #   - "127.0.0.1:9000:9000" # Optional local-only debug binding for Authentik server
     networks:
@@ -360,9 +357,6 @@ services:
     user: root
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-      - /data/authentik/media:/data
-      - ./certs:/certs
-      - ./custom-templates:/templates
     networks:
       - authentik
 
