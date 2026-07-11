@@ -1,5 +1,4 @@
 services:
-
   # Traefik for network routing
 
   traefik:
@@ -35,32 +34,32 @@ services:
       - ./traefik:/etc/traefik
       - ./traefik/letsencrypt:/letsencrypt
     environment:
-      - ACME_EMAIL=${ACME_EMAIL}
-      - TRANSIP_ACCOUNT_NAME=${TRANSIP_ACCOUNT_NAME}
-      - TRANSIP_PRIVATE_KEY_PATH=/etc/traefik/transip.key
+      ACME_EMAIL: ${ACME_EMAIL}
+      TRANSIP_ACCOUNT_NAME: ${TRANSIP_ACCOUNT_NAME}
+      TRANSIP_PRIVATE_KEY_PATH: /etc/traefik/transip.key
     networks:
       - public
 
-  # Core application components:
+  # Core application components
 
   frontend:
     image: ghcr.io/lekkeratlas/lekkeratlas-application:latest
     container_name: lekkeratlas-frontend
     restart: always
     healthcheck:
-      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1/index.html || exit 1"]
+      test:
+        - CMD-SHELL
+        - wget -q --spider http://127.0.0.1/index.html || exit 1
       interval: 30s
       timeout: 5s
       retries: 5
       start_period: 20s
-
     environment:
       AUTH_AUTHORITY: https://auth.lekkeratlas.nl/application/o/lekker-atlas/
       AUTH_CLIENT_ID: ${AUTHENTIK_LEKKER_ATLAS_CLIENT_ID}
       AUTH_REDIRECT_URI: https://lekkeratlas.nl
       AUTH_POST_LOGOUT_REDIRECT_URI: https://lekkeratlas.nl
       API_BASE_URL: https://api.lekkeratlas.nl
-
     networks:
       - public
     labels:
@@ -88,7 +87,7 @@ services:
       rabbitmq:
         condition: service_healthy
       authentik-server:
-        condition: service_started
+        condition: service_healthy
     networks:
       - public
       - rabbitmq
@@ -97,7 +96,7 @@ services:
       # OIDC config
       AUTHENTIK_HOST: https://auth.lekkeratlas.nl
       AUTHENTIK_CLIENT_ID: ${AUTHENTIK_LEKKER_ATLAS_CLIENT_ID}
-      
+
       # Webhook config
       AUTHENTIK_WEBHOOK_SECRET_ALLOWED_SOURCE_CIDRS: 172.16.0.0/12 # Whitelist the whole docker private network so authentik can reach the webhook
       AUTHENTIK_WEBHOOK_SECRET: ${AUTHENTIK_WEBHOOK_SECRET}
@@ -134,7 +133,6 @@ services:
       - /dev/net/tun:/dev/net/tun
     environment:
       # WireGuard VPN config
-      # Fill these values from your existing WireGuard configuration.
       VPN_SERVICE_PROVIDER: custom
       VPN_TYPE: wireguard
       WIREGUARD_PRIVATE_KEY: ${WIREGUARD_PRIVATE_KEY}
@@ -173,14 +171,16 @@ services:
       DATASOURCE_USERNAME: ${POSTGRES_USER}
       DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
 
+  # Application database
+
   database:
     image: ghcr.io/lekkeratlas/lekkeratlas-database:latest
     container_name: lekkeratlas-database
     restart: always
     environment:
-      - POSTGRES_USER=${POSTGRES_USER}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-      - POSTGRES_DB=${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
     healthcheck:
       test:
         - CMD-SHELL
@@ -196,21 +196,26 @@ services:
     networks:
       - lekkeratlas_database
 
-  # Queue logic components:
+  # Queue logic components
 
   rabbitmq:
-    image: rabbitmq:3-management
+    image: rabbitmq:3-management-alpine
     container_name: lekkeratlas-rabbitmq
-    restart: always
+    restart: unless-stopped
     environment:
-      - RABBITMQ_DEFAULT_USER=${RABBITMQ_DEFAULT_USER}
-      - RABBITMQ_DEFAULT_PASS=${RABBITMQ_DEFAULT_PASS}
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS}
+    volumes:
+      - /data/rabbitmq:/var/lib/rabbitmq
     healthcheck:
-      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
-      interval: 30s
+      test:
+        - CMD
+        - rabbitmq-diagnostics
+        - -q
+        - ping
+      interval: 5s
       timeout: 5s
-      retries: 5
-      start_period: 20s
+      retries: 20
     expose:
       - "5672" # AMQP; only used internally by backend and workers
       - "15672" # Management UI; exposed only through Traefik + Authentik
@@ -233,53 +238,57 @@ services:
       - "traefik.http.middlewares.rabbitmq-management-redirect.redirectscheme.scheme=https"
       - "traefik.http.middlewares.rabbitmq-management-redirect.redirectscheme.permanent=true"
 
-  # Authentik container components:
+  # Authentik container components
 
   authentik-postgresql:
     image: postgres:16-alpine
     container_name: authentik-postgres
-    restart: always
+    restart: unless-stopped
     environment:
-      - POSTGRES_USER=${AUTHENTIK_POSTGRES_USER}
-      - POSTGRES_PASSWORD=${AUTHENTIK_POSTGRES_PASSWORD}
-      - POSTGRES_DB=${AUTHENTIK_POSTGRES_DB:-authentik}
+      POSTGRES_USER: ${AUTHENTIK_POSTGRES_USER}
+      POSTGRES_PASSWORD: ${AUTHENTIK_POSTGRES_PASSWORD}
+      POSTGRES_DB: ${AUTHENTIK_POSTGRES_DB}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - /data/authentik/postgresql:/var/lib/postgresql/data
     healthcheck:
       test:
         - CMD-SHELL
-        - pg_isready -d $${POSTGRES_DB} -U $${POSTGRES_USER}
-      interval: 30s
+        - pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}
+      interval: 5s
       timeout: 5s
-      retries: 5
-      start_period: 20s
-    volumes:
-      - /data/authentik/postgresql:/var/lib/postgresql/data
+      retries: 20
     # ports:
     #   - "127.0.0.1:5433:5432" # Optional local-only debug binding for Authentik PostgreSQL
     networks:
       - authentik
 
   authentik-server:
-    image: ${AUTHENTIK_IMAGE:-ghcr.io/goauthentik/server}:${AUTHENTIK_TAG:-2026.2.2}
+    image: ghcr.io/lekkeratlas/lekkeratlas-authentik:experimental
     container_name: lekkeratlas-authentik-server
-    restart: always
+    restart: unless-stopped
     command: server
     depends_on:
       authentik-postgresql:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "ak healthcheck"]
+      test:
+        - CMD-SHELL
+        - ak healthcheck
       interval: 30s
       timeout: 5s
       retries: 5
       start_period: 60s
     environment:
-      - AUTHENTIK_SECRET_KEY=${AUTHENTIK_SECRET_KEY}
-      - AUTHENTIK_ERROR_REPORTING__ENABLED=false
-      - AUTHENTIK_POSTGRESQL__HOST=authentik-postgresql
-      - AUTHENTIK_POSTGRESQL__PORT=5432
-      - AUTHENTIK_POSTGRESQL__USER=${AUTHENTIK_POSTGRES_USER}
-      - AUTHENTIK_POSTGRESQL__NAME=${AUTHENTIK_POSTGRES_DB:-authentik}
-      - AUTHENTIK_POSTGRESQL__PASSWORD=${AUTHENTIK_POSTGRES_PASSWORD}
+      AUTHENTIK_SECRET_KEY: ${AUTHENTIK_SECRET_KEY}
+      AUTHENTIK_ERROR_REPORTING__ENABLED: ${AUTHENTIK_ERROR_REPORTING__ENABLED}
+      AUTHENTIK_POSTGRESQL__HOST: authentik-postgresql
+      AUTHENTIK_POSTGRESQL__NAME: ${AUTHENTIK_POSTGRES_DB}
+      AUTHENTIK_POSTGRESQL__USER: ${AUTHENTIK_POSTGRES_USER}
+      AUTHENTIK_POSTGRESQL__PASSWORD: ${AUTHENTIK_POSTGRES_PASSWORD}
+      AUTHENTIK_BOOTSTRAP_EMAIL: ${AUTHENTIK_BOOTSTRAP_EMAIL}
+      AUTHENTIK_BOOTSTRAP_PASSWORD: ${AUTHENTIK_BOOTSTRAP_PASSWORD}
+      AUTHENTIK_BOOTSTRAP_TOKEN: ${AUTHENTIK_BOOTSTRAP_TOKEN}
     shm_size: 512mb
     volumes:
       - /data/authentik/media:/data
@@ -311,26 +320,42 @@ services:
       - "traefik.http.middlewares.authentik-forward-auth.forwardauth.authResponseHeaders=X-authentik-username,X-authentik-groups,X-authentik-entitlements,X-authentik-email,X-authentik-name,X-authentik-uid,X-authentik-jwt,X-authentik-meta-jwks,X-authentik-meta-outpost,X-authentik-meta-provider,X-authentik-meta-app,X-authentik-meta-version"
 
   authentik-worker:
-    image: ${AUTHENTIK_IMAGE:-ghcr.io/goauthentik/server}:${AUTHENTIK_TAG:-2026.2.2}
+    image: ghcr.io/lekkeratlas/lekkeratlas-authentik:experimental
     container_name: lekkeratlas-authentik-worker
-    restart: always
+    restart: unless-stopped
     command: worker
     depends_on:
       authentik-postgresql:
         condition: service_healthy
+      authentik-server:
+        condition: service_started
     healthcheck:
-      test: ["CMD-SHELL", "ak healthcheck"]
+      test:
+        - CMD-SHELL
+        - ak healthcheck
       interval: 30s
       timeout: 5s
       retries: 5
       start_period: 60s
     environment:
-      - AUTHENTIK_SECRET_KEY=${AUTHENTIK_SECRET_KEY}
-      - AUTHENTIK_POSTGRESQL__HOST=authentik-postgresql
-      - AUTHENTIK_POSTGRESQL__PORT=5432
-      - AUTHENTIK_POSTGRESQL__USER=${AUTHENTIK_POSTGRES_USER}
-      - AUTHENTIK_POSTGRESQL__NAME=${AUTHENTIK_POSTGRES_DB:-authentik}
-      - AUTHENTIK_POSTGRESQL__PASSWORD=${AUTHENTIK_POSTGRES_PASSWORD}
+      LEKKERATLAS_HEALTH_REQUIRE_BLUEPRINTS: "true"
+      LEKKERATLAS_STATE_DIR: /tmp/lekkeratlas
+
+      AUTHENTIK_SECRET_KEY: ${AUTHENTIK_SECRET_KEY}
+      AUTHENTIK_ERROR_REPORTING__ENABLED: ${AUTHENTIK_ERROR_REPORTING__ENABLED}
+      AUTHENTIK_POSTGRESQL__HOST: authentik-postgresql
+      AUTHENTIK_POSTGRESQL__NAME: ${AUTHENTIK_POSTGRES_DB}
+      AUTHENTIK_POSTGRESQL__USER: ${AUTHENTIK_POSTGRES_USER}
+      AUTHENTIK_POSTGRESQL__PASSWORD: ${AUTHENTIK_POSTGRES_PASSWORD}
+
+      AUTHENTIK_LEKKERATLAS_FQDN: ${AUTHENTIK_LEKKERATLAS_FQDN}
+      AUTHENTIK_LEKKERATLAS_REDIRECT_URI: ${AUTHENTIK_LEKKERATLAS_REDIRECT_URI}
+      AUTHENTIK_LEKKERATLAS_LOGOUT_URI: ${AUTHENTIK_LEKKERATLAS_REDIRECT_URI}
+      AUTHENTIK_LEKKERATLAS_WEBHOOK_FQDN: ${AUTHENTIK_LEKKERATLAS_WEBHOOK_FQDN}
+
+      AUTHENTIK_WEBHOOK_SYNC_LEKKERATLAS_DB_BEARER_TOKEN: ${AUTHENTIK_WEBHOOK_SYNC_LEKKERATLAS_DB_BEARER_TOKEN}
+      AUTHENTIK_PROVIDER_FOR_LEKKERATLAS_CLIENT_SECRET: ${AUTHENTIK_PROVIDER_FOR_LEKKERATLAS_CLIENT_SECRET}
+      AUTHENTIK_RABBITMQ_CLIENT_SECRET: ${AUTHENTIK_RABBITMQ_CLIENT_SECRET}
     shm_size: 512mb
     user: root
     volumes:
@@ -345,12 +370,15 @@ networks:
   public:
     name: lekkeratlas-public
     internal: false
+
   lekkeratlas_database:
     name: lekkeratlas-database
     internal: true
+
   rabbitmq:
     name: lekkeratlas-rabbitmq
     internal: true
+
   authentik:
     name: lekkeratlas-authentik
     internal: true
