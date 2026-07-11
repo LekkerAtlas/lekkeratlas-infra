@@ -339,5 +339,3 @@ chmod 600 "$ENV_FILE"
 
 echo ""
 echo "✅ .env file generated!"
-echo "🔒 Permissions set to 600."
-echo "⚠️  Keep this file safe and DO NOT commit it to git."
