@@ -92,6 +92,7 @@ services:
       - public
       - rabbitmq
       - lekkeratlas_database
+      - backend
     environment:
       # OIDC config
       AUTHENTIK_HOST: https://auth.lekkeratlas.nl
@@ -350,7 +351,7 @@ services:
       AUTHENTIK_LEKKERATLAS_FQDN: ${AUTHENTIK_LEKKERATLAS_FQDN}
       AUTHENTIK_LEKKERATLAS_REDIRECT_URI: ${AUTHENTIK_LEKKERATLAS_REDIRECT_URI}
       AUTHENTIK_LEKKERATLAS_LOGOUT_URI: ${AUTHENTIK_LEKKERATLAS_REDIRECT_URI}
-      AUTHENTIK_LEKKERATLAS_WEBHOOK_FQDN: ${AUTHENTIK_LEKKERATLAS_WEBHOOK_FQDN}
+      AUTHENTIK_LEKKERATLAS_WEBHOOK_FQDN: lekkeratlas-backend:8080/webhooks/authentik # ${AUTHENTIK_LEKKERATLAS_WEBHOOK_FQDN}
 
       AUTHENTIK_WEBHOOK_SYNC_LEKKERATLAS_DB_BEARER_TOKEN: ${AUTHENTIK_WEBHOOK_SECRET}
       AUTHENTIK_PROVIDER_FOR_LEKKERATLAS_CLIENT_SECRET: ${AUTHENTIK_PROVIDER_FOR_LEKKERATLAS_CLIENT_SECRET}
@@ -360,12 +361,17 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     networks:
+      - backend
       - authentik
 
 networks:
   public:
     name: lekkeratlas-public
     internal: false
+
+  backend:
+    name: lekkeratlas-backend
+    internal: true
 
   lekkeratlas_database:
     name: lekkeratlas-database
